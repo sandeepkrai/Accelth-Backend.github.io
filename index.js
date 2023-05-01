@@ -14,7 +14,8 @@ const doctorrouter = require('./routes/doctorroute')
 const appointmentrouter = require('./routes/appointmentroute')
 app.use(express.json())
 app.use(bodyParser.json())
-app.use(methodOverride('_method'))
+app.use(methodOverride('_method')) 
+
 app.get('/',(req, res)=>{
     res.send("Server Running Successfully")
 })

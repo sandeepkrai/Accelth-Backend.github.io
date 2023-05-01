@@ -15,6 +15,7 @@ Patient: {
             Emergency_contact:"+91-8993648428";
             Address: "4/1, Tumkur Rd, Yeshwanthpur Industrial Area, Phase 1, Yeswanthpur, Bengaluru, Karnataka 560022";
         }
+        
         Medical: {
             Allergies: null;
             Vaccination: null;
