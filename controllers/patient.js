@@ -9,12 +9,13 @@ const exp = require('constants')
 var moment = require('moment')
 const MedItem = require('../models/items')
 const QRCode = require('qrcode')
+const axios = require('axios')
 
 // const multer = require("multer");
 // const {GridFsStorage} = require("multer-gridfs-storage");
 
 const changePassword = async (req, res) => {
-    const { Email_id, Password } = req.body
+    const { Contact_Number, Password } = req.body
     if (Password.length <= 8) {
         return res.status(400).json({
             message: "Password must be atleast 8 characters long"
@@ -23,7 +24,7 @@ const changePassword = async (req, res) => {
     bcrypt.hash(Password, 10).then(async (hash) => {
         try {
             const patient = await Patient.patient.findOne({
-                "Profile.Personal.Email_id": Email_id
+                "Profile.Personal.Contact_Number": Contact_Number
             })
             bcrypt.compare(Password, patient.Profile.Personal.Password).then(function (result) {
                 if (result)
@@ -38,7 +39,7 @@ const changePassword = async (req, res) => {
             })
         }
         await Patient.patient.updateOne({
-            "Profile.Personal.Email_id": Email_id
+            "Profile.Personal.Contact_Number": Contact_Number
         }, {
             "Profile.Personal.Password": hash,
         }).then(Patient =>
@@ -72,7 +73,7 @@ const deleteApatient = async (req, res) => {
 }
 
 const registerPatient = async (req, res) => {
-    const { Name, Contact_Number, Email_id, Password, DateofBirth, Gender, Bloodgroup, Height, Weight, Allergies, Blindcondition } = req.body
+    const { Name, Contact_Number, Email_id, Password, DateofBirth, Gender, Bloodgroup, Height, Weight, Allergies, Blindcondition, Activity} = req.body
     if (Password.length <= 8) {
         return res.status(400).json({
             message: "Password must be atleast 8 characters long"
@@ -96,6 +97,9 @@ const registerPatient = async (req, res) => {
                     Allergies: Allergies,
                     Blindcondition: Blindcondition,
                 },
+                Lifestyle: {
+                    Activity: Activity
+                }
             },
         }).then(Patient =>
             res.status(200).json({
@@ -107,15 +111,21 @@ const registerPatient = async (req, res) => {
         })
         )
     });
+    // const data = 'https://tqbm2dzy21.execute-api.us-west-2.amazonaws.com/patient/getasinglepatient/' + Email_id; // Replace this with the URL of your API
+    // const filePath = './' + Email_id + '_qr-code.png'; // Replace this with the path where you want to save the QR code
+    // QRCode.toFile(filePath, data, function (err) {
+    //     if (err) throw err;
+    //     console.log('QR code saved to', filePath);
+    // });
 }
 
 const loginPatient = async (req, res) => {
     const { Email_id, Password } = req.body
-    try{
-        console.log(await QRCode.toDataURL("hhttp://8be6-45-112-144-67.ngrok.io/patient/getasinglepatient/"+Email_id))
-    }catch(err){
-        console.log(err)
-    }
+    // try{
+    //     console.log(await QRCode.toDataURL("hhttp://8be6-45-112-144-67.ngrok.io/patient/getasinglepatient/"+Email_id))
+    // }catch(err){
+    //     console.log(err)
+    // }
     if (!Email_id || !Password) {
         return res.status(400).json({ Message: "Email_id or Password not present" });
     }
@@ -392,34 +402,55 @@ const OrderPlace = async (req, res) => {
     var hour = TIME.split(':')[0]
     var minute = TIME.split(':')[1]
     var seconds = TIME.split(':')[2].split(' ')[0]
-    const {CartItems, InvoiceFilename, TotalAmount, Address, DroneID,
+    const { CartItems, TotalAmount, Address, DroneID,
         DeliveredDate, DeliveredTime, Status } = req.body
     const { Email_id } = req.params
-    await Patient.patient.updateOne({
-        "Profile.Personal.Email_id": Email_id,
-    }, {
-        $push: {
-            Orders: {
-                OrderID: "ODR" + year + month + date + hour + minute + seconds,
-                Date: DATE,
-                Time: ODRTIME,
-                CartItems: CartItems,
-                InvoiceFilename: InvoiceFilename,
-                TotalAmount: TotalAmount,
-                Address: Address,
-                DroneID: DroneID,
-                DeliveredDate: DeliveredDate,
-                DeliveredTime: DeliveredTime,
-                Status: Status,
-            }
-        }
-    }, { upsert: true }
-    ).then(patient => {
-        res.status(200).json({
-            Message: "Congratulations! Order Placed",
-            Patient: patient
+    await Patient.patient
+        .updateOne(
+            {
+                'Profile.Personal.Email_id': Email_id,
+            },
+            {
+                $push: {
+                    Orders: {
+                        OrderID:
+                            'ODR' +
+                            year +
+                            month +
+                            date +
+                            hour +
+                            minute +
+                            seconds,
+                        Date: DATE,
+                        Time: ODRTIME,
+                        CartItems: CartItems,
+                        InvoiceFilename:
+                            'INV' +
+                            year +
+                            month +
+                            date +
+                            hour +
+                            minute +
+                            seconds,
+                        TotalAmount: TotalAmount,
+                        Address: Address,
+                        DroneID: DroneID,
+                        DeliveredDate: DeliveredDate,
+                        DeliveredTime: DeliveredTime,
+                        Status: Status,
+                    },
+                },
+            },
+            { upsert: true }
+        )
+        .then((patient) => {
+            res.status(200).json({
+                Message: 'Congratulations! Order Placed',
+                Patient: patient,
+            });
         })
-    }).catch((error) => res.status(400).json(error.message))
+        .catch((error) => res.status(400).json(error.message));
+    await clearCart(req, res);
 }
 
 const getAllPatients = async (req, res) => {
@@ -1080,10 +1111,126 @@ const ChangeQuantity = async (req, res) => {
     }
 }
 
+const clearCart = async (req, res) => {
+    const { Email_id } = req.params;
+    await Patient.patient
+        .updateOne(
+            {
+                'Profile.Personal.Email_id': Email_id,
+            },
+            { Cart: [] }
+        );
+};
+
+async function getBotResponse(param, callback) {
+    // console.log(param.QueryMess)
+    let data = JSON.stringify({
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "user",
+                "content": param.QueryMess,
+            }
+        ]
+    });
+    let config = {
+        method: 'post',
+        maxBodyLength: Infinity,
+        url: 'https://api.openai.com/v1/chat/completions',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer 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'
+        },
+        data: data
+    };
+    axios.request(config)
+        .then(async (response) => {
+            const ans = {
+                "Reply": response.data.choices[0].message.content,
+                "Time": param.Time
+            }
+            // console.log(JSON.stringify(response.data.choices[0].message.content));
+            await Patient.patient.updateOne({
+                "Profile.Personal.Email_id": param.Email_id,
+            }, {
+                $push: {
+                    Chat: {
+                        Date: param.Date,
+                        Time: param.Time,
+                        TextMessage: response.data.choices[0].message.content,
+                        Sender: param.Sender,
+                    }
+                }
+            }, { upsert: true }).then(patient => callback(null, ans, patient))
+        })
+        .catch((error) => {
+            console.log(error)
+        });
+}
+
+const UserMessageSent = async (req, res) => {
+    var DATE = moment().format('L')
+    var TIME = moment().format('LTS')
+    var year = DATE.split('/')[2]
+    var month = DATE.split('/')[0]
+    var date = DATE.split('/')[1]
+    var hour = TIME.split(':')[0]
+    var minute = TIME.split(':')[1]
+    var seconds = TIME.split(':')[2].split(' ')[0]
+    const { Email_id } = req.params;
+    const { TextMessage } = req.body;
+    // console.log(TextMessage);
+    try {
+        await Patient.patient.updateOne({
+            "Profile.Personal.Email_id": Email_id
+        }, {
+            $push: {
+                Chat: {
+                    Date: date + "/" + month + "/" + year,
+                    Time: hour + ":" + minute + ":" + seconds,
+                    TextMessage: TextMessage,
+                    Sender: "User"
+                }
+            }
+        }, { upsert: true }
+        )
+        var DATE = moment().format('L')
+        var TIME = moment().format('LTS')
+        var year = DATE.split('/')[2]
+        var month = DATE.split('/')[0]
+        var date = DATE.split('/')[1]
+        var hour = TIME.split(':')[0]
+        var minute = TIME.split(':')[1]
+        var seconds = TIME.split(':')[2].split(' ')[0]
+        paramData = {
+            "Email_id": Email_id,
+            "Date": date + "/" + month + "/" + year,
+            "Time": hour + ":" + minute + ":" + seconds,
+            "Sender": "Bot",
+            "QueryMess": TextMessage,
+        }
+        // console.log(TextMessage)
+        getBotResponse(paramData, (error, ans, results) => {
+            if (error)
+                return res.status(400).json({
+                    message: "Fail",
+                    data: results,
+                    ans: ans
+                })
+            return res.status(200).send({
+                message: "Success",
+                data: results,
+                ans: ans
+            })
+        })
+    } catch (error) {
+        res.status(400).json(error)
+    }
+}
 
 
 
-
+module.exports.UserMessageSent = UserMessageSent
 module.exports.ChangeQuantity = ChangeQuantity
 module.exports.addItemtoCart = addItemtoCart
 module.exports.addImaging = addImaging
